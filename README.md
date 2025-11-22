@@ -4,6 +4,7 @@ handling of sockets was inspired by some of these examples:
 - https://wiki.netbsd.org/examples/socket_programming/
 - https://stevens.netmeister.org/631/apue-code/09/streamread.c
 - https://stevens.netmeister.org/631/apue-code/09/dualstack-streamread.c
+- https://stevens.netmeister.org/631/apue-code/09/one-socket-select-fork.c
 
 # Usage
 

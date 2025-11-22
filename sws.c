@@ -1,16 +1,23 @@
-#include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/wait.h>
 
 #include <netinet/in.h>
 
+#include <errno.h>
 #include <limits.h>
 #include <netdb.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #define MAXPENDING 5
+
+#ifndef SLEEP
+#define SLEEP 5
+#endif
 
 void
 usage(void)
@@ -51,47 +58,72 @@ createSocket(struct addrinfo *info)
 }
 
 void
+handleConnection(int fd) {
+    int rv = 1;
+
+    while (rv != 0) {
+        char buf[BUFSIZ];
+        char *response =
+            "HTTP/1.0 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "\r\n"
+            "Hello";
+
+        if ((rv = read(fd, buf, BUFSIZ)) < 0) {
+            perror("reading stream message");
+            break;
+        }
+        if (rv > 0) {
+            write(1, buf, rv);
+        }
+
+        write(fd, response, strlen(response));
+
+        if (rv == 0) {
+            (void)printf("Ending connection\n");
+            break;
+        }
+    }
+
+    if (close(fd) < 0) {
+        perror("close");
+        exit(EXIT_FAILURE);
+    }
+    exit(EXIT_SUCCESS);
+}
+
+void
 handleSocket(int sock)
 {
-    for (;;) {
-        int fd, rv = 1;
-        struct sockaddr_in6 client;
-        socklen_t length;
+    int fd;
+    pid_t pid;
+    struct sockaddr_in6 client;
+    socklen_t length;
 
-        memset(&client, 0, sizeof(client));
-        length = sizeof(client);
-        if ((fd = accept(sock, (struct sockaddr *)&client, &length)) < 0) {
-            perror("accept");
-            continue;
-        }
+    memset(&client, 0, sizeof(client));
 
-        while (rv != 0) {
-            char buf[BUFSIZ];
-            char *response =
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: text/plain\r\n"
-                "Content-Length: 5\r\n"
-                "\r\n"
-                "Hello";
-
-            if ((rv = read(fd, buf, BUFSIZ)) < 0) {
-                perror("reading stream message");
-                break;
-            }
-            if (rv > 0) {
-                write(1, buf, rv);
-            }
-
-            write(fd, response, strlen(response));
-
-            if (rv == 0) {
-                (void)printf("Ending connection\n");
-                break;
-            }
-        }
-
-        close(fd);
+    length = sizeof(client);
+    if ((fd = accept(sock, (struct sockaddr *)&client, &length)) < 0) {
+        perror("accept");
+        return;
     }
+
+    if ((pid = fork()) < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) { /* child */
+        handleConnection(fd);
+    }
+
+    /* parent returns */
+
+}
+
+void
+reap()
+{
+    wait(NULL);
 }
 
 int
@@ -106,6 +138,11 @@ main(int argc, char **argv)
     hints.ai_family = AF_UNSPEC; /* accept both ipv4 and ipv6 */
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE; /* wildcards */
+
+    if (signal(SIGCHLD, reap) == SIG_ERR) { /* reap child processes */
+        perror("signal");
+        exit(EXIT_FAILURE);
+    }
 
     while ((ch = getopt(argc, argv, ":dhc:i:l:p:")) != -1) {
         switch (ch) {
@@ -162,9 +199,25 @@ main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    handleSocket(sock);
-
     freeaddrinfo(res);
+
+    for (;;) {
+        fd_set ready;
+        struct timeval timeout;
+
+        FD_ZERO(&ready);
+        FD_SET(sock, &ready);
+        timeout.tv_sec = SLEEP;
+        timeout.tv_usec = 0;
+
+        if (select(sock + 1, &ready, 0, 0, &timeout) < 0) {
+            if (errno != EINTR) {
+                perror("select");
+            }
+        } else if (FD_ISSET(sock, &ready)) {
+            handleSocket(sock);
+        }
+    }
 
     (void)dir;
     (void)logfile;
