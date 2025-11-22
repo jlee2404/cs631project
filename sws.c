@@ -20,14 +20,15 @@ usage(void)
 
 /*
  * create a socket, then bind and listen.
- * if info is null, then a socket is created to listen on ipv6 and ipv4
- * equivalent addresses. if info is not null, then loop through the addresses
- * until a valid one is found.
+ * loop through the addresses in info until a valid one is found.
+ * return values:
+ *  -1: no socket was found
+ *  >0: the socket
  */
 int
 createSocket(struct addrinfo *info)
 {
-    int sock;
+    int sock = -1;
     struct addrinfo *p;
 
     for (p = info; p != NULL; p = p->ai_next) {
@@ -36,15 +37,14 @@ createSocket(struct addrinfo *info)
         }
 
         if (bind(sock, p->ai_addr, p->ai_addrlen) == 0) {
-           break; /* found the address */
+            if (listen(sock, MAXPENDING) < 0) {
+                perror("listen");
+                exit(EXIT_FAILURE);
+            }
+            break; /* found the address */
         }
 
         close(sock);
-    }
-
-    if (listen(sock, MAXPENDING) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
     }
 
     return sock;
@@ -97,7 +97,7 @@ handleSocket(int sock)
 int
 main(int argc, char **argv)
 {
-    char *cgidir, *dir, *logfile, *address, *port = "8080";
+    char *cgidir, *dir, *logfile, *address = NULL, *port = "8080";
     int ch, debug = 0, sock;
     struct addrinfo hints, *res;
 
@@ -115,16 +115,16 @@ main(int argc, char **argv)
         case 'h':
             usage();
             return 0;
-        case 'c': /* add error checking on directory */
+        case 'c':
             cgidir = optarg;
             break;
         case 'i':
             address = optarg;
             break;
-        case 'l': /* add error checking on directory */
+        case 'l':
             logfile = optarg;
             break;
-        case 'p': /* add error checking on port */
+        case 'p':
             port = optarg;
             break;
         case '?':
@@ -145,13 +145,27 @@ main(int argc, char **argv)
     /* add error checking on directory */
     dir = argv[0];
 
-    /* add error checking on getaddrinfo */
-    getaddrinfo(address, port, &hints, &res);
+    if (!debug) {
+        if (daemon(0, 0) < 0) {
+            perror("daemon");
+            exit(EXIT_FAILURE);
+        }
+    }
 
-    sock = createSocket(res);
+    if (getaddrinfo(address, port, &hints, &res) != 0) {
+        perror("getaddrinfo");
+        exit(EXIT_FAILURE);
+    }
+
+    if ((sock = createSocket(res)) < 0) {
+        perror("createSocket");
+        exit(EXIT_FAILURE);
+    }
+
     handleSocket(sock);
 
-    (void)debug;
+    freeaddrinfo(res);
+
     (void)dir;
     (void)logfile;
     (void)cgidir;

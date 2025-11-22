@@ -5,11 +5,19 @@ handling of sockets was inspired by some of these examples:
 - https://stevens.netmeister.org/631/apue-code/09/streamread.c
 - https://stevens.netmeister.org/631/apue-code/09/dualstack-streamread.c
 
+# Usage
+
+```
+make
+./sws [-dh] [-c dir] [-i address] [-l file] [-p port] dir
+```
+
 # Group Work
 
 Aya:
 - option handling
 - sockets: socket, bind, listen, accept
+- daemonization
 
 Justin:
 
