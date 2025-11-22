@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -12,6 +13,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "parse.h"
+#include "sws.h"
 
 #define MAXPENDING 5
 
@@ -58,39 +62,43 @@ createSocket(struct addrinfo *info)
 }
 
 void
-handleConnection(int fd) {
-    int rv = 1;
+handleConnection(int fd, struct sockaddr_in6 client)
+{
+    int rv;
+    char buf[BUFSIZ];
+    char claddr[INET6_ADDRSTRLEN];
+    char *response =
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: 5\r\n"
+        "\r\n"
+        "Hello";
+    const char *rip;
+    struct request req;
 
-    while (rv != 0) {
-        char buf[BUFSIZ];
-        char *response =
-            "HTTP/1.0 200 OK\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 5\r\n"
-            "\r\n"
-            "Hello";
+    memset(&req, 0, sizeof(struct request));
 
-        if ((rv = read(fd, buf, BUFSIZ)) < 0) {
-            perror("reading stream message");
-            break;
-        }
-        if (rv > 0) {
-            write(1, buf, rv);
-        }
-
-        write(fd, response, strlen(response));
-
-        if (rv == 0) {
-            (void)printf("Ending connection\n");
-            break;
-        }
+    if ((rv = read(fd, buf, BUFSIZ)) <= 0) {
+        perror("reading stream message");
+        goto exit;
     }
 
+    if ((rip = inet_ntop(PF_INET6, &(client.sin6_addr), claddr, INET6_ADDRSTRLEN)) == NULL) {
+        perror("inet_ntop");
+        rip = "unkown";
+    }
+    if (parseRequest(buf, &req) == 0) {
+        (void)printf("Client: %s\nMethod: %s\nURI: %s\nHeader: %s\n", rip, req.method, req.uri, req.header);
+    }
+    write(fd, response, strlen(response));
+
+exit:
     if (close(fd) < 0) {
         perror("close");
         exit(EXIT_FAILURE);
     }
     exit(EXIT_SUCCESS);
+    /* NOTREACHED */
 }
 
 void
@@ -113,11 +121,13 @@ handleSocket(int sock)
         perror("fork");
         exit(EXIT_FAILURE);
     } else if (pid == 0) { /* child */
-        handleConnection(fd);
+        handleConnection(fd, client);
     }
 
     /* parent returns */
-
+    if (close(fd) < 0) {
+        perror("close");
+    }
 }
 
 void
