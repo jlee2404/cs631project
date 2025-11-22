@@ -19,6 +19,8 @@ Aya:
 - option handling
 - sockets: socket, bind, listen, accept
 - daemonization
+- reading data from client
+- request parsing
 
 Justin:
 
