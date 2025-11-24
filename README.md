@@ -14,7 +14,7 @@ make
 ```
 
 # Group Work
-
+### Division of Labor & Contributions
 Aya:
 - option handling
 - sockets: socket, bind, listen, accept
@@ -23,4 +23,9 @@ Aya:
 - request parsing
 
 Justin:
+- HTTP response
+- tested and verified snapshot met deliverables
 
+### Collaboration
+- Discussed tasks and division of labor via Slack
+- Managed code and tasks via GitHub
