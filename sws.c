@@ -67,12 +67,7 @@ handleConnection(int fd, struct sockaddr_in6 client)
     int rv;
     char buf[BUFSIZ];
     char claddr[INET6_ADDRSTRLEN];
-    char *response =
-        "HTTP/1.0 200 OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: 5\r\n"
-        "\r\n"
-        "Hello";
+    char *response;
     const char *rip;
     struct request req;
 
@@ -89,7 +84,22 @@ handleConnection(int fd, struct sockaddr_in6 client)
     }
     if (parseRequest(buf, &req) == 0) {
         (void)printf("Client: %s\nMethod: %s\nURI: %s\nHeader: %s\n", rip, req.method, req.uri, req.header);
+
+	response = "HTTP/1.0 200 OK\r\n"
+	    "Content-Type: text/plain\r\n"
+	    "Content-Length: 19\r\n\r\n"
+	    "Request valid: OK\r\n";
+    } else {
+	(void)printf("Client: %s\nParse failed\n", rip);
+
+	response = "HTTP/1.0 400 Bad Request\r\n"
+	    "Content-Type: text/plain\r\n"
+	    "Content-Length: 15\r\n\r\n"
+	    "Bad Request\r\n";
+
+	goto exit;
     }
+
     write(fd, response, strlen(response));
 
 exit:
