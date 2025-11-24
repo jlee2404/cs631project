@@ -3,7 +3,9 @@
 
 #include <limits.h>
 
+#ifndef METHODSZ
 #define METHODSZ 5 /* enough for GET/HEAD + \0 */
+#endif
 
 struct request {
     char method[METHODSZ];

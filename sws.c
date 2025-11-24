@@ -17,7 +17,9 @@
 #include "parse.h"
 #include "sws.h"
 
+#ifndef MAXPENDING
 #define MAXPENDING 5
+#endif
 
 #ifndef SLEEP
 #define SLEEP 5
