@@ -1,0 +1,66 @@
+commit 41e568eece762eee18944d21d2dbf36c4f7ed72f
+Merge: 857e750 4ab974f
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Nov 24 00:38:45 2025 -0500
+
+    Merge pull request #1 from jlee2404/justin
+    
+    updated to have basic appropriate HTTP responses
+
+commit 4ab974f4d282c4d6d24026b5bb493854cb47f884
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Nov 24 05:36:58 2025 +0000
+
+    make clean before push
+
+commit e90446584815e0ce380a193d018460ab7d88fcc3
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Nov 24 05:36:09 2025 +0000
+
+    updated to have basic appropriate HTTP responses
+
+commit 857e75051ef3c1a72d8ee9e2d8b241575f8d3a21
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Nov 22 20:17:08 2025 +0000
+
+    update README
+
+commit 79f78cf41a4a6f2684444ea6ee9a4c4b76b8447d
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Nov 22 20:15:05 2025 +0000
+
+    basic parsing for requests
+
+commit 9bbf679f10f4856deb6509e4dff27803477cbe9b
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Nov 22 14:18:09 2025 +0000
+
+    handle multiple connections
+
+commit e8091f707720e55f9dbb449db62250e51573e2cb
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Nov 22 13:24:06 2025 +0000
+
+    daemonize
+    
+    update README
+
+commit aae7c5c0a56c4edf5b2fef576224f8ebcf9c885a
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Nov 22 03:48:04 2025 +0000
+
+    update README
+    
+    update README
+
+commit c44539c55fe6880573f66aa1587caa31755c1ce8
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Nov 22 03:40:06 2025 +0000
+
+    option handling and accepts network connections
+
+commit 1485c3daa1353582a7490fc0be8902506db6f13b
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Wed Nov 19 17:40:42 2025 -0500
+
+    Initial commit
