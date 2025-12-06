@@ -2,6 +2,7 @@
 #define _REQUEST_H_
 
 #include <limits.h>
+#include <time.h>
 
 #ifndef METHODSZ
 #define METHODSZ 5 /* enough for GET/HEAD + \0 */
@@ -12,6 +13,8 @@ struct request {
     char uri[PATH_MAX];
     float version;
     char header[BUFSIZ];
+    char if_modified_since[BUFSIZ];
+    time_t ims_time;
 };
 
 #endif

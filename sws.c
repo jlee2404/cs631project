@@ -67,6 +67,7 @@ void
 handleConnection(int fd, struct sockaddr_in6 client)
 {
     int rv;
+    int total_read = 0;
     char buf[BUFSIZ];
     char claddr[INET6_ADDRSTRLEN];
     char *response;
@@ -74,8 +75,8 @@ handleConnection(int fd, struct sockaddr_in6 client)
     struct request req;
 
     memset(&req, 0, sizeof(struct request));
-
-    if ((rv = read(fd, buf, BUFSIZ)) <= 0) {
+    
+    if ((rv = read(fd, buf+total_read, BUFSIZ-total_read-1)) <= 0) {
         perror("reading stream message");
         goto exit;
     }
