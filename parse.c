@@ -36,21 +36,39 @@ validMethod(const char *method)
 int
 parseRequest(const char *requeststr, struct request *req)
 {
-    /* try to parse full request with header */
-    sscanf(requeststr, "%s %s HTTP/%f\r\nIf-Modified-Since: "
-                "%s\r\n\r\n", req->method, req->uri, &(req->version), req->header);
+    char *line;
+    char requestcpy[BUFSIZ] = {0};
+    char header[BUFSIZ];
+    int n;
+
+    strcpy(requestcpy, requeststr);
+    line = strtok(requestcpy, "\r\n");
+
+    sscanf(line, "%s %s HTTP/%f", req->method, req->uri, &(req->version));
 
     if (!validMethod(req->method)) {
         return -1;
     }
 
-    if (req->version != 0.9 && req->version != 1.0) {
+    if (req->version != 0.9 && req->version != 1.0 && req->version != 1.1) {
         return -1;
     }
 
     /* HTTP/0.9 only supports GET */
     if (req->version == 0.9 && strcmp(req->method, "GET") != 0) {
         return -1;
+    }
+
+    for(;;) {
+        line = strtok(NULL, "\r\n");
+        if (line == NULL) {
+            break;
+        }
+
+        n = sscanf(line, "If-Modified-Since: %s", header);
+        if (n == 1) {
+            strcpy(req->if_modified_since_header, header);
+        }
     }
 
     return 0;

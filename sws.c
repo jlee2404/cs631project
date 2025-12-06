@@ -120,7 +120,7 @@ handleConnection(int fd, struct sockaddr_in6 client, int logfd)
         rip = "unkown";
     }
     if (parseRequest(request, &req) == 0) {
-        (void)printf("Client: %s\nMethod: %s\nURI: %s\nHeader: %s\n", rip, req.method, req.uri, req.header);
+        (void)printf("Client: %s\nMethod: %s\nURI: %s\nHeader: %s\n", rip, req.method, req.uri, req.if_modified_since_header);
         status = 200;
         response = "HTTP/1.0 200 OK\r\n"
             "Content-Type: text/plain\r\n"
@@ -137,10 +137,6 @@ handleConnection(int fd, struct sockaddr_in6 client, int logfd)
 
     if (logfd >= 0) {
         logRequest(logfd, request, response, rip, time_now, status);
-    }
-
-    if (status >= 400) {
-        goto exit;
     }
 
     write(fd, response, strlen(response));

@@ -1,3 +1,38 @@
+commit 52acd8bf972ec7aed38a3b368eccb07f25c6fa35
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Dec 6 20:04:34 2025 +0000
+
+    implemented LOGGING
+    
+    implemented logging
+
+commit eb066240189b64e11f19ac5f0165ed7168ccbff4
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Mon Nov 24 12:27:49 2025 +0000
+
+    add guards around definitions
+
+commit e8a2c3ea0e8b52ce2a93041b317fa15e34dc0824
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Nov 24 01:00:41 2025 -0500
+
+    Update README.md
+
+commit 4bf165b86189ec4667ceefb8d8549dd7e2abc8fe
+Merge: 41e568e 4952973
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Nov 24 00:58:01 2025 -0500
+
+    Merge pull request #2 from jlee2404/justin
+    
+    added LOG
+
+commit 49529732f6210e772c99b5e338c2e26ba1e127b3
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Nov 24 05:56:24 2025 +0000
+
+    added LOG
+
 commit 41e568eece762eee18944d21d2dbf36c4f7ed72f
 Merge: 857e750 4ab974f
 Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
