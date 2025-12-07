@@ -29,6 +29,7 @@
 #define SLEEP 5
 #endif
 
+/* this was calculated by finding the maximum bytes from printing GMT time, e.g "2019-10-28T12:12:12Z" */
 #ifndef TIMEBUFSIZ
 #define TIMEBUFSIZ 22
 #endif
@@ -45,7 +46,7 @@ usage(void)
 
 void
 logRequest(int logfd, const char *request, const char *response,
-	const char *rip, time_t time_now, int status)
+        const char *rip, time_t time_now, int status)
 {
     char log[BUFSIZ] = {0}, time[TIMEBUFSIZ] = {0}, line[BUFSIZ] = {0};
     struct tm *gmtime_now = gmtime(&time_now);
@@ -55,18 +56,18 @@ logRequest(int logfd, const char *request, const char *response,
 
     /* get only first line of request */
     while (request[i] != '\r') {
-	line[i] = request[i];
-	i++;
+        line[i] = request[i];
+        i++;
     }
 
     if ((n = snprintf(log, BUFSIZ, "%s %s \"%s\" %d %d\n",
-	rip, time, line, status, responsesz)) < 0) {
-	    perror("snprintf");
-	    return;
+        rip, time, line, status, responsesz)) < 0) {
+            perror("snprintf");
+            return;
     }
 
     if (write(logfd, log, n) < 0) {
-	perror("write");
+        perror("write");
     }
 }
 
@@ -344,10 +345,10 @@ main(int argc, char **argv)
             break;
         case 'l':
             logfile = optarg;
-	    if ((logfd = open(logfile, O_WRONLY | O_APPEND)) < 0) {
-		perror("open");
-		exit(EXIT_FAILURE);
-	    }
+            if ((logfd = open(logfile, O_WRONLY | O_APPEND)) < 0) {
+                perror("open");
+                exit(EXIT_FAILURE);
+            }
             break;
         case 'p':
             port = optarg;
@@ -375,11 +376,11 @@ main(int argc, char **argv)
             perror("daemon");
             exit(EXIT_FAILURE);
         }
-    } else {
-	if (logfd > 0) {
-	    close(logfd);
-	}
-	logfd = STDOUT_FILENO;
+    } else { /* debug mode, so log to stdout */
+        if (logfd > 0) {
+            close(logfd); /* -d overwrites -l */
+        }
+        logfd = STDOUT_FILENO;
     }
 
     if (getaddrinfo(address, port, &hints, &res) != 0) {
@@ -413,7 +414,6 @@ main(int argc, char **argv)
     }
 
     (void)dir;
-    (void)logfile;
     (void)cgidir;
 
     close(logfd);
