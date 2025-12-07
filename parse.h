@@ -5,5 +5,6 @@
 
 int parseRequest(const char *, struct request *);
 int validMethod(const char *);
+time_t parseDate(const char *);
 
 #endif
