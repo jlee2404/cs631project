@@ -256,8 +256,11 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 	snprintf(headerBuf, sizeof(headerBuf),
 	    "HTTP/1.0 200 OK\r\n"
 	    "Content-Type: text/plain\r\n"
-	    "Content-Length: 19\r\n\r\n"
-	    "Request valid: OK\r\n");
+	    "Content-Length: 19\r\n\r\n");
+
+	if (strcmp(req.method, "GET") == 0) {
+	    strncat(headerBuf, "Request valid: OK\r\n", sizeof(headerBuf)-strlen(headerBuf)-1);
+	}
 	response = headerBuf;
     }
 
