@@ -12,7 +12,6 @@ struct request {
     char method[METHODSZ];
     char uri[PATH_MAX];
     float version;
-    char header[BUFSIZ];
     char if_modified_since[BUFSIZ];
     time_t ims_time;
 };
