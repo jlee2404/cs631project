@@ -250,9 +250,20 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 	    response = header;
 	    goto exit;
 	}
+
+	char headerBuf[512]; /* 512 is safely large enough without going overboard */
+	if (req.ims_time > 0 && sb.st_mtime <= req.ims_time) {
+	    status = 304;
+	    snprintf(headerBuf, sizeof(headerBuf),
+		"HTTP/1.0 304 Not Modified\r\n"
+		"Date: %s\r\n"
+		"Server: sws/1.0\r\n\r\n",
+		asctime(gmtime(&time_now)));
+	    response = headerBuf;
+	    goto exit;
+	}
 	
 	status = 200;
-	char headerBuf[512]; /* 512 is safely large enough without going overboard */
 	snprintf(headerBuf, sizeof(headerBuf),
 	    "HTTP/1.0 200 OK\r\n"
 	    "Content-Type: text/plain\r\n"
