@@ -9,7 +9,12 @@ handling of sockets was inspired by some of these examples:
 # Usage
 
 ```
-make
+# NetBSD & Linux
+make clean & make
+
+# OmniOS
+gmake clean & gmake
+
 ./sws [-dh] [-c dir] [-i address] [-l file] [-p port] dir
 ```
 
@@ -28,6 +33,7 @@ Justin:
 - Directory indexing
 - GCI execution
 - User directory support
+- Makefile portability
 - tested and verified snapshot met deliverables
 
 ### Collaboration
