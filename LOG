@@ -1,3 +1,30 @@
+commit 1f97ed06a99239fa867a92e74a16e891fe9a4ef7
+Merge: 2fa775a 0d4e66e
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Dec 8 15:09:50 2025 -0500
+
+    Merge pull request #6 from jlee2404/justin
+    
+    fixed OmniOS magic library issue
+
+commit 0d4e66e646bb64c653e8e314dd2abba5f9222c55
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 20:09:16 2025 +0000
+
+    fixed OmniOS magic library issue
+
+commit 2fa775afd61a0159185c79488c12f3b2ce077a2c
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Dec 8 13:30:08 2025 -0500
+
+    Update README.md
+
+commit 45b48033a9cfd32baa0a156c6c4c280d8ea94cf3
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 18:25:47 2025 +0000
+
+    updated LOG
+
 commit 4ca5f09490c0d2fe9775219f118eb4d30232ef78
 Author: Justin Lee <jlee16@stevens.edu>
 Date:   Mon Dec 8 18:16:00 2025 +0000
