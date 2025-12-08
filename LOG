@@ -1,3 +1,64 @@
+commit 4ca5f09490c0d2fe9775219f118eb4d30232ef78
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 18:16:00 2025 +0000
+
+    fixed compiler errors in OmniOS
+
+commit 40430dc29cf7be22b2a6dc2ea7e701f6df9624f4
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 16:55:29 2025 +0000
+
+    fixed compiler warning on netBSD
+
+commit b8861ae771491ca494d9a5c621dcaec4ab563ca2
+Merge: 57f5def 6f0651f
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Dec 8 11:51:53 2025 -0500
+
+    Merge pull request #5 from jlee2404/justin
+    
+    fixed compiler issues on linux
+
+commit 6f0651f26cf798ddf6dcbfd48d072003a1666830
+Author: Justin Lee <jlee16@linux.cs631.dotwtf.wtf>
+Date:   Mon Dec 8 16:50:35 2025 +0000
+
+    removed executables
+
+commit 8f97a99fafda006bbd282cfb675e4c0b19de7965
+Author: Justin Lee <jlee16@linux.cs631.dotwtf.wtf>
+Date:   Mon Dec 8 16:49:37 2025 +0000
+
+    fixed compiler errors in linux
+
+commit 57f5def993b54e5d4035f132402ca0ddcab757dc
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Dec 8 01:59:57 2025 -0500
+
+    Update README.md
+
+commit ea83ce007401a4df9de3f9b4edc8e865265b42e0
+Merge: 0140dfe cf06d48
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Dec 8 01:56:58 2025 -0500
+
+    Merge pull request #4 from jlee2404/justin
+    
+    updated handleConnection and implemented CGI
+
+commit cf06d4857995fa2a4a3871ad629c185e51a6fa83
+Merge: 9343f1f 0140dfe
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Mon Dec 8 01:55:33 2025 -0500
+
+    Merge branch 'main' into justin
+
+commit 9343f1f54d08d3138f87ef419ee7af21698b3572
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 06:50:42 2025 +0000
+
+    touch ups
+
 commit 9e2f2239eeb90ef8def492b688edc0cc7963b6ff
 Author: Justin Lee <jlee16@stevens.edu>
 Date:   Mon Dec 8 06:14:15 2025 +0000
@@ -34,6 +95,22 @@ Date:   Sun Dec 7 20:50:57 2025 +0000
 
     fixed handling for HEAD
 
+commit 0140dfee0a5b267276f0f9a6ae497cf47dcb9f21
+Merge: 743bb93 ce24487
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Sun Dec 7 14:32:16 2025 -0500
+
+    Merge pull request #3 from jlee2404/justin
+    
+    Implemented URI resolution and basic request flow
+
+commit ce244874881da4f35ecac5a4c26287801c608523
+Merge: 01a98da 743bb93
+Author: jlee2404 <161257420+jlee2404@users.noreply.github.com>
+Date:   Sun Dec 7 14:31:26 2025 -0500
+
+    Merge branch 'main' into justin
+
 commit 01a98daba2919a6f177dc52b65aced344eab9820
 Author: Justin Lee <jlee16@stevens.edu>
 Date:   Sun Dec 7 19:26:20 2025 +0000
@@ -52,11 +129,12 @@ Date:   Sun Dec 7 03:41:45 2025 +0000
 
     implemented URI resolution and basic request flow
 
-commit a7ba214e10b7a81de87a88e830e04b19975eb148
-Author: Justin Lee <jlee16@stevens.edu>
-Date:   Sat Dec 6 07:37:08 2025 +0000
+commit 743bb933c229342052fc13eb7c62ad3d15101f7b
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Dec 6 22:25:14 2025 +0000
 
-    updated parseRequest
+    updated parsing
+
 commit 52acd8bf972ec7aed38a3b368eccb07f25c6fa35
 Author: Aya Salama <asalama0204@gmail.com>
 Date:   Sat Dec 6 20:04:34 2025 +0000
@@ -64,6 +142,12 @@ Date:   Sat Dec 6 20:04:34 2025 +0000
     implemented LOGGING
     
     implemented logging
+
+commit a7ba214e10b7a81de87a88e830e04b19975eb148
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Sat Dec 6 07:37:08 2025 +0000
+
+    updated parseRequest
 
 commit eb066240189b64e11f19ac5f0165ed7168ccbff4
 Author: Aya Salama <asalama0204@gmail.com>
