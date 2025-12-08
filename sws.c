@@ -63,12 +63,12 @@ usage(void)
 }
 
 void
-logRequest(int logfd, const char *request, const char *response,
-	const char *rip, time_t time_now, int status)
+logRequest(int logfd, const char *request, const char *rip, 
+    time_t time_now, int status, size_t body_bytes)
 {
     char log[BUFSIZ] = {0}, time[TIMEBUFSIZ] = {0}, line[BUFSIZ] = {0};
     struct tm *gmtime_now = gmtime(&time_now);
-    int i = 0, responsesz = strlen(response), n;
+    int i = 0, n;
 
     strftime(time, TIMEBUFSIZ, "%Y-%m-%dT%H:%M:%SZ", gmtime_now);
 
@@ -79,7 +79,7 @@ logRequest(int logfd, const char *request, const char *response,
     }
 
     if ((n = snprintf(log, BUFSIZ, "%s %s \"%s\" %d %d\n",
-	rip, time, line, status, responsesz)) < 0) {
+	rip, time, line, status, (int)body_bytes)) < 0) {
 	    perror("snprintf");
 	    return;
     }
@@ -162,6 +162,7 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
     char candidate[PATH_MAX];
     char resolved[PATH_MAX];
     char realroot[PATH_MAX];
+    fprintf(stderr, "uriToPath: docroot=%s uri=%s\n", docroot, uri);
 
     if (!docroot || !uri || !outpath || outsize == 0) {
 	return -1;
@@ -177,30 +178,56 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
     if (cgidir && strncmp(uri, "/cgi-bin", 8) == 0) {
 	*flags_out = FLAG_CGI;
 
-	const char *rest = uri + 8;
+	const char *query = strchr(uri, '?');
+	size_t ulen;
+	if (query) {
+	    ulen = (size_t)(query - uri);
+	} else {
+	    ulen = strlen(uri);
+	}
+
+	char cleanuri[PATH_MAX];
+	memcpy(cleanuri, uri, ulen);
+	cleanuri[ulen] = '\0';
+
+	const char *rest = cleanuri + 8;
 	if (*rest == '\0') {
 	    rest = "/";
 	}
 
-	if (snprintf(outpath, outsize, "%s%s", cgidir, rest) >= (int)outsize) {
+	if (snprintf(candidate, sizeof(candidate), "%s%s", cgidir, rest) >= 
+	    (int)sizeof(candidate)) {
 	    return -1;
 	}
+
+	fprintf(stderr, "uriToPath: CGI candidate=%s\n", candidate);
+
+	if (realpath(candidate, resolved) == NULL) {
+	    strncpy(outpath, candidate, outsize);
+	    outpath[outsize - 1] = '\0';
+	    return 0;
+	}
+
+	strncpy(outpath, resolved, outsize);
+	outpath[outsize - 1] = '\0';
 
 	if (stat(outpath, statbuf) == 0) {
 	    *flags_out |= FLAG_EXISTS;
 	}
+	
+	fprintf(stderr, "uriToPath: CGI resolved=%s flags=%d\n", outpath, *flags_out);
 
 	return 0;
     }
 
-    
     if (realpath(docroot, realroot) == NULL) {
+	perror("realpath");
 	return -1;
     }
 
-
-    if (uri[0] == '~') {
-	const char *ptr = uri + 1;
+    if (uri[0] == '/' && uri[1] == '~') {
+	fprintf(stderr, "uriToPath: USERDIR detected uri=%s\n", uri);
+	const char *ptr = uri + 2;
 	size_t uname_len = 0;
 	while (*ptr && *ptr != '/' && uname_len < MAXUSERNAME) {
 	    uname_len++;
@@ -208,19 +235,23 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	}
 
 	if (uname_len == 0 || uname_len >= MAXUSERNAME) {
+	    fprintf(stderr, "uriToPath: invalid username\n");
+	    errno = EACCES;
 	    return -1;
 	}
 	
 	char uname[MAXUSERNAME + 1];
-	memcpy(uname, uri + 1, uname_len);
+	memcpy(uname, uri + 2, uname_len);
 	uname[uname_len] = '\0';
 
 	struct passwd *pw = getpwnam(uname);
 	if (!pw) {
+	    fprintf(stderr, "uriToPath: user '%s' not found\n", uname);
+	    errno = EACCES;
 	    return -1;
 	}
 
-	const char *rest = uri + 1 + uname_len;
+	const char *rest = uri + 2 + uname_len;
 	if (rest[0] == '\0') {
 	    if (snprintf(candidate, sizeof(candidate), "%s/sws", pw->pw_dir) >= 
 		(int)sizeof(candidate)) {
@@ -241,18 +272,24 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	    (int)sizeof(candidate)) {
     	    return -1;
 	}
+	fprintf(stderr, "uriToPath: candidate=%s\n", candidate);
     }
 
     if (realpath(candidate, resolved) == NULL) {
+	fprintf(stderr, "uriToPath: realpath failed for %s errno=%d\n", candidate, errno);
 	strncpy(outpath, candidate, outsize);
 	outpath[outsize - 1] = '\0';
+	fprintf(stderr, "uriToPath: returning unresolved path=%s\n", outpath);
 	return 0;
     }
+
+    fprintf(stderr, "uriToPath: resolved=%s realroot=%s\n", resolved, realroot);
 
     size_t rootlen = strlen(realroot);
     if (strncmp(resolved, realroot, rootlen) != 0 ||
 	(resolved[rootlen] != '/' && resolved[rootlen] != '\0')) {
 	errno = EACCES;
+	fprintf(stderr, "uriToPath: resolved path escapes docroot -> FORBIDDEN\n");
 	return -1;
     }
 
@@ -267,6 +304,7 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	    size_t urilen = strlen(uri);
 	    if (uri[urilen-1] != '/') {
 		*flags_out |= FLAG_NEEDSLASH;
+		fprintf(stderr, "uriToPath: directory needs slash, outpath=%s flags=%d\n", outpath, *flags_out);
 		return 0;
 	    }
 	    
@@ -284,7 +322,7 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	    }
 	}
     }
-
+    fprintf(stderr, "uriToPath: SUCCESS outpath=%s flags=%d\n", outpath, *flags_out);
     return 0;
 }
 
@@ -302,6 +340,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
     const char *rip;
     const char *mime = NULL;
     struct request req;
+    size_t body_bytes = 0;
     time_t time_now = time(NULL);
 
     memset(&req, 0, sizeof(req));
@@ -324,12 +363,14 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
             	"Content-Type: text/plain\r\n"
 	    	"Content-Length: 17\r\n\r\n"
     	    	"Not Implemented\r\n";
+	    body_bytes = 17;
     	} else {
 	    status = 400;
   	    response = "HTTP/1.0 400 Bad Request\r\n"
             	"Content-Type: text/plain\r\n"
 	    	"Content-Length: 13\r\n\r\n"
     	   	 "Bad Request\r\n";
+	    body_bytes = 13;
 	}
 
 	goto send_response;
@@ -344,6 +385,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    "Content-Type: text/plain\r\n"
 	    "Content-Length: 11\r\n\r\n"
 	    "Forbidden\r\n";
+	body_bytes = 11;
 	goto send_response;
     }
 
@@ -353,6 +395,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
        	    "Content-Type: text/plain\r\n"
 	    "Content-Length: 11\r\n\r\n"
 	    "Not Found\r\n";
+	body_bytes = 11;
 	goto send_response;
     }
 
@@ -373,6 +416,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    "Content-Length: 0\r\n\r\n",
 	    uri_with_slash);
 	response = header;
+	body_bytes = 0;
 	goto send_response;
     }
 
@@ -391,6 +435,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    "Content-Length: 0\r\n\r\n",
 	    dateBuf, lastModBuf);
 	response = header;
+	body_bytes = 0;
 	goto send_response;
     }
 
@@ -402,6 +447,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	        "Content-Type: text/plain\r\n"
     		"Content-Length: 11\r\n\r\n"
 		"Forbidden\r\n";
+	    body_bytes = 11;
 	    goto send_response;
 	}
 
@@ -437,6 +483,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    "Content-Length: %d\r\n\r\n%s",
 	    dateBuf, lastModBuf, body_len, body);
 	response = header;
+	body_bytes = body_len;
 	goto send_response;
     }
 
@@ -446,6 +493,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    status = 500;
 	    response = "HTTP/1.0 500 Internal Server Error\r\n"
 		"Content-Length: 0\r\n\r\n";
+	    body_bytes = 0;
 	    goto send_response;
 	}
 
@@ -456,6 +504,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    status = 500;
 	    response = "HTTP/1.0 500 Internal Server Error\r\n"
 		"Content-Length: 0\r\n\r\n";
+	    body_bytes = 0;
 	    goto send_response;
 	}
 
@@ -466,6 +515,8 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    setenv("SCRIPT_NAME", req.uri, 1);
 	    setenv("SERVER_PROTOCOL", "HTTP/1.0", 1);
 	    setenv("SERVER_SOFTWARE", "sws/1.0", 1);
+	    setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
+	    setenv("REMOTE_ADDR", rip, 1);
 
 	    char *qmark = strchr(req.uri, '?');
 	    if (qmark) {
@@ -486,7 +537,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	}
 
 	close(pipefd[1]);
-
+	
 	formatDate(time_now, dateBuf, sizeof(dateBuf));
 	snprintf(header, sizeof(header),
 	    "HTTP/1.0 200 OK\r\n"
@@ -495,13 +546,18 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    dateBuf);
 
 	write(fd, header, strlen(header));
-
+	
 	char cgi_buf[BUFSIZ];
 	ssize_t n;
-
+	
+	ssize_t cgi_total = 0;
 	while ((n = read(pipefd[0], cgi_buf, sizeof(cgi_buf))) > 0) {
-	    write(fd, cgi_buf, n);
+	    cgi_total += n;
+	    if (strcmp(req.method, "GET") == 0) {
+                write(fd, cgi_buf, n);
+	    }
 	}
+	body_bytes = cgi_total;
 
 	close(pipefd[0]);
 	waitpid(pid, NULL, 0);
@@ -520,6 +576,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    "Content-Type: text/plain\r\n"
      	    "Content-Length: 11\r\n\r\n"
 	    "Forbidden\r\n";
+	body_bytes = 11;
 	goto send_response;
     }
 
@@ -536,6 +593,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	"Content-Type: %s\r\n"
 	"Content-Length: %jd\r\n\r\n",
 	dateBuf, lastModBuf, mime, (intmax_t)sb.st_size);
+    body_bytes = sb.st_size;
 
     write(fd, header, strlen(header));
 
@@ -562,7 +620,7 @@ send_response:
     }
 
     if (logfd >= 0) {
-	logRequest(logfd, request, response, rip, time_now, status);
+	logRequest(logfd, request, rip, time_now, status, body_bytes);
     }
 
 exit:
@@ -644,7 +702,7 @@ main(int argc, char **argv)
             break;
         case 'l':
             logfile = optarg;
-	    if ((logfd = open(logfile, O_WRONLY | O_APPEND)) < 0) {
+	    if ((logfd = open(logfile, O_WRONLY | O_APPEND | O_CREAT, 0664)) < 0) {
 		perror("open");
 		exit(EXIT_FAILURE);
 	    }
