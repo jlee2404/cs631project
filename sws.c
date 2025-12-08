@@ -40,6 +40,22 @@
 #define MAXUSERNAME 256 /* 255 is classic UNIX username limit */
 #endif
 
+#ifndef FLAG_EXISTS
+#define FLAG_EXISTS 1
+#endif
+
+#ifndef FLAG_DIR
+#define FLAG_DIR 2
+#endif
+
+#ifndef FLAG_NEEDSLASH
+#define FLAG_NEEDSLASH 4
+#endif
+
+#ifndef FLAG_CGI
+#define FLAG_CGI 8
+#endif
+
 void
 usage(void)
 {
@@ -141,7 +157,7 @@ guess_mime_type(const char *path) /* FUNCTION NAME */
 
 int
 uriToPath(const char *docroot, const char *uri, char *outpath, 
-    size_t outsize, struct stat *statbuf, int *flags_out)
+    size_t outsize, struct stat *statbuf, int *flags_out, const char *cgidir)
 {   
     char candidate[PATH_MAX];
     char resolved[PATH_MAX];
@@ -153,14 +169,35 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 
     *flags_out = 0;
 
-    if (realpath(docroot, realroot) == NULL) {
-	return -1;
-    }
-    
     if (strstr(uri, "..") != NULL) {
 	errno = EACCES;
         return -1;
     }
+    
+    if (cgidir && strncmp(uri, "/cgi-bin", 8) == 0) {
+	*flags_out = FLAG_CGI;
+
+	const char *rest = uri + 8;
+	if (*rest == '\0') {
+	    rest = "/";
+	}
+
+	if (snprintf(outpath, outsize, "%s%s", cgidir, rest) >= (int)outsize) {
+	    return -1;
+	}
+
+	if (stat(outpath, statbuf) == 0) {
+	    *flags_out |= FLAG_EXISTS;
+	}
+
+	return 0;
+    }
+
+    
+    if (realpath(docroot, realroot) == NULL) {
+	return -1;
+    }
+
 
     if (uri[0] == '~') {
 	const char *ptr = uri + 1;
@@ -224,12 +261,12 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
     }
 
     if (stat(outpath, statbuf) == 0) {
-	*flags_out |= 1; /* resolved and exists */
+	*flags_out |= FLAG_EXISTS;
 	if (S_ISDIR(statbuf->st_mode)) {
-	    *flags_out |= 2; /* is direcotry */
+	    *flags_out |= FLAG_DIR;
 	    size_t urilen = strlen(uri);
 	    if (uri[urilen-1] != '/') {
-		*flags_out |= 4; /* needs trailing slash redirect */
+		*flags_out |= FLAG_NEEDSLASH;
 		return 0;
 	    }
 	    
@@ -242,8 +279,8 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 		if (snprintf(outpath, outsize, "%s", indexpath) >= (int)outsize) {
 		    return -1;
 		}
-		*flags_out &= ~2; /* file now */
-		*flags_out |= 1;
+		*flags_out &= ~FLAG_DIR;
+		*flags_out |= FLAG_EXISTS;
 	    }
 	}
     }
@@ -252,7 +289,7 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 }
 
 void
-handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
+handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd, const char *cgidir)
 {
     int rd, status;
     int flags = 0;
@@ -301,7 +338,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
     char fullpath[PATH_MAX];
     struct stat sb;
 
-    if (uriToPath(dir, req.uri, fullpath, sizeof(fullpath), &sb, &flags) < 0) {
+    if (uriToPath(dir, req.uri, fullpath, sizeof(fullpath), &sb, &flags, cgidir) < 0) {
 	status = 403;
 	response = "HTTP/1.0 403 Forbidden\r\n"
 	    "Content-Type: text/plain\r\n"
@@ -310,7 +347,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 	goto send_response;
     }
 
-    if (!(flags & 1)) {
+    if (!(flags & FLAG_EXISTS)) {
 	status = 404;
 	response = "HTTP/1.0 404 Not Found\r\n"
        	    "Content-Type: text/plain\r\n"
@@ -319,7 +356,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 	goto send_response;
     }
 
-    if (flags & 4) {
+    if (flags & FLAG_NEEDSLASH) {
 	char uri_with_slash[PATH_MAX];
 	size_t urilen = strlen(req.uri);
 
@@ -357,7 +394,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 	goto send_response;
     }
 
-    if ((flags & 2)) {
+    if ((flags & FLAG_DIR)) {
 	DIR *dirp = opendir(fullpath);
     	if (!dirp) {
 	    status = 403;
@@ -402,6 +439,79 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 	response = header;
 	goto send_response;
     }
+
+    if ((flags & FLAG_CGI)) {
+	int pipefd[2];
+	if (pipe(pipefd) < 0) {
+	    status = 500;
+	    response = "HTTP/1.0 500 Internal Server Error\r\n"
+		"Content-Length: 0\r\n\r\n";
+	    goto send_response;
+	}
+
+	pid_t pid = fork();
+	if (pid < 0) {
+	    close(pipefd[0]);
+	    close(pipefd[1]);
+	    status = 500;
+	    response = "HTTP/1.0 500 Internal Server Error\r\n"
+		"Content-Length: 0\r\n\r\n";
+	    goto send_response;
+	}
+
+	if (pid == 0) {
+	    close(pipefd[0]);
+
+	    setenv("REQUEST_METHOD", req.method, 1);
+	    setenv("SCRIPT_NAME", req.uri, 1);
+	    setenv("SERVER_PROTOCOL", "HTTP/1.0", 1);
+	    setenv("SERVER_SOFTWARE", "sws/1.0", 1);
+
+	    char *qmark = strchr(req.uri, '?');
+	    if (qmark) {
+		setenv("QUERY_STRING", qmark + 1, 1);
+	    } else {
+		setenv("QUERY_STRING", "", 1);
+	    }
+
+	    setenv("REDIRECT_STATUS", "200", 1);
+
+	    dup2(pipefd[1], STDOUT_FILENO);
+	    close(pipefd[1]);
+
+	    execl(fullpath, fullpath, NULL);
+
+	    perror("exec");
+	    _exit(1);
+	}
+
+	close(pipefd[1]);
+
+	formatDate(time_now, dateBuf, sizeof(dateBuf));
+	snprintf(header, sizeof(header),
+	    "HTTP/1.0 200 OK\r\n"
+	    "Date: %s\r\n"
+	    "Server: sws/1.0\r\n",
+	    dateBuf);
+
+	write(fd, header, strlen(header));
+
+	char cgi_buf[BUFSIZ];
+	ssize_t n;
+
+	while ((n = read(pipefd[0], cgi_buf, sizeof(cgi_buf))) > 0) {
+	    write(fd, cgi_buf, n);
+	}
+
+	close(pipefd[0]);
+	waitpid(pid, NULL, 0);
+
+	status = 200;
+	wrote_direct = 1;
+	response = header;
+	goto send_response;
+    }
+
 
     filefd = open(fullpath, O_RDONLY);
     if (filefd < 0) {
@@ -465,7 +575,7 @@ exit:
 }
 
 void
-handleSocket(int sock, const char *dir, int logfd)
+handleSocket(int sock, const char *dir, int logfd, const char *cgidir)
 {
     int fd;
     pid_t pid;
@@ -484,7 +594,7 @@ handleSocket(int sock, const char *dir, int logfd)
         perror("fork");
         exit(EXIT_FAILURE);
     } else if (pid == 0) { /* child */
-        handleConnection(fd, client, dir, logfd);
+        handleConnection(fd, client, dir, logfd, cgidir);
 	_exit(EXIT_SUCCESS);
     }
 
@@ -503,7 +613,7 @@ reap()
 int
 main(int argc, char **argv)
 {
-    char *cgidir, *dir, *logfile, *address = NULL, *port = "8080";
+    char *cgidir = NULL, *dir = NULL, *logfile = NULL, *address = NULL, *port = "8080";
     int ch, debug = 0, sock, logfd = -1;
     struct addrinfo hints, *res;
 
@@ -598,7 +708,7 @@ main(int argc, char **argv)
                 perror("select");
             }
         } else if (FD_ISSET(sock, &ready)) {
-            handleSocket(sock, dir, logfd);
+            handleSocket(sock, dir, logfd, cgidir);
         }
     }
 
