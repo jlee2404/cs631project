@@ -24,7 +24,10 @@ Aya:
 - logging
 
 Justin:
-- HTTP response
+- HTTP response & headers
+- Directory indexing
+- GCI execution
+- User directory support
 - tested and verified snapshot met deliverables
 
 ### Collaboration
