@@ -40,6 +40,11 @@
 #define MAXUSERNAME 256 /* 255 is classic UNIX username limit */
 #endif
 
+#ifndef MAXDATE
+#define MAXDATE 32 /* 31 is the longest valid HTTP date string */
+#endif
+
+
 #ifndef FLAG_EXISTS
 #define FLAG_EXISTS 1
 #endif
@@ -130,9 +135,9 @@ formatDate(time_t t, char *buf, size_t buflen)
 }
 
 static const char *
-guess_mime_type(const char *path) /* FUNCTION NAME */
+guess_mime_type(const char *path)
 {
-    static magic_t magic_cookie = NULL; /* VARIABLE NAME */
+    static magic_t magic_cookie = NULL;
 
     if (!magic_cookie) {
 	magic_cookie = magic_open(MAGIC_MIME_TYPE);
@@ -155,6 +160,18 @@ guess_mime_type(const char *path) /* FUNCTION NAME */
     return mime;
 }
 
+/*
+ * translates a requested URI into a filesystem path
+ * 	- blocks ".." traversal
+ * 	- resolves /cgi-bin paths
+ * 	- resolves ~user paths
+ * 	- makes sure paths stay inside docroot
+ * 	- set flags
+ *
+ * return values:
+ *  0: sucess
+ *  -1: error
+ */
 int
 uriToPath(const char *docroot, const char *uri, char *outpath, 
     size_t outsize, struct stat *statbuf, int *flags_out, const char *cgidir)
@@ -162,7 +179,6 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
     char candidate[PATH_MAX];
     char resolved[PATH_MAX];
     char realroot[PATH_MAX];
-    fprintf(stderr, "uriToPath: docroot=%s uri=%s\n", docroot, uri);
 
     if (!docroot || !uri || !outpath || outsize == 0) {
 	return -1;
@@ -197,12 +213,12 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 
 	if (snprintf(candidate, sizeof(candidate), "%s%s", cgidir, rest) >= 
 	    (int)sizeof(candidate)) {
+	    perror("snprintf");
 	    return -1;
 	}
 
-	fprintf(stderr, "uriToPath: CGI candidate=%s\n", candidate);
-
 	if (realpath(candidate, resolved) == NULL) {
+	    perror("realpath");
 	    strncpy(outpath, candidate, outsize);
 	    outpath[outsize - 1] = '\0';
 	    return 0;
@@ -215,8 +231,6 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	    *flags_out |= FLAG_EXISTS;
 	}
 	
-	fprintf(stderr, "uriToPath: CGI resolved=%s flags=%d\n", outpath, *flags_out);
-
 	return 0;
     }
 
@@ -226,7 +240,6 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
     }
 
     if (uri[0] == '/' && uri[1] == '~') {
-	fprintf(stderr, "uriToPath: USERDIR detected uri=%s\n", uri);
 	const char *ptr = uri + 2;
 	size_t uname_len = 0;
 	while (*ptr && *ptr != '/' && uname_len < MAXUSERNAME) {
@@ -235,7 +248,6 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	}
 
 	if (uname_len == 0 || uname_len >= MAXUSERNAME) {
-	    fprintf(stderr, "uriToPath: invalid username\n");
 	    errno = EACCES;
 	    return -1;
 	}
@@ -246,7 +258,7 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 
 	struct passwd *pw = getpwnam(uname);
 	if (!pw) {
-	    fprintf(stderr, "uriToPath: user '%s' not found\n", uname);
+	    perror("getpwnam");
 	    errno = EACCES;
 	    return -1;
 	}
@@ -255,11 +267,13 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	if (rest[0] == '\0') {
 	    if (snprintf(candidate, sizeof(candidate), "%s/sws", pw->pw_dir) >= 
 		(int)sizeof(candidate)) {
+		perror("snprintf");
 		return -1;
 	    }
 	} else {
 	    if (snprintf(candidate, sizeof(candidate), "%s/sws%s", pw->pw_dir, rest) >= 
 		(int)sizeof(candidate)) {
+		perror("snprintf");
 		return -1;
 	    }
 	}
@@ -270,30 +284,26 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 
 	if (snprintf(candidate, sizeof(candidate), "%s%s", docroot, uri) >= 
 	    (int)sizeof(candidate)) {
+	    perror("snprintf");
     	    return -1;
 	}
-	fprintf(stderr, "uriToPath: candidate=%s\n", candidate);
     }
 
     if (realpath(candidate, resolved) == NULL) {
-	fprintf(stderr, "uriToPath: realpath failed for %s errno=%d\n", candidate, errno);
 	strncpy(outpath, candidate, outsize);
 	outpath[outsize - 1] = '\0';
-	fprintf(stderr, "uriToPath: returning unresolved path=%s\n", outpath);
 	return 0;
     }
-
-    fprintf(stderr, "uriToPath: resolved=%s realroot=%s\n", resolved, realroot);
 
     size_t rootlen = strlen(realroot);
     if (strncmp(resolved, realroot, rootlen) != 0 ||
 	(resolved[rootlen] != '/' && resolved[rootlen] != '\0')) {
 	errno = EACCES;
-	fprintf(stderr, "uriToPath: resolved path escapes docroot -> FORBIDDEN\n");
 	return -1;
     }
 
     if (snprintf(outpath, outsize, "%s", resolved) >= (int)outsize) {
+	perror("snprintf");
 	return -1;
     }
 
@@ -304,17 +314,18 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	    size_t urilen = strlen(uri);
 	    if (uri[urilen-1] != '/') {
 		*flags_out |= FLAG_NEEDSLASH;
-		fprintf(stderr, "uriToPath: directory needs slash, outpath=%s flags=%d\n", outpath, *flags_out);
 		return 0;
 	    }
 	    
 	    char indexpath[PATH_MAX];
 	    if (snprintf(indexpath, sizeof(indexpath), "%s/index.html", outpath) >= 
 		(int)sizeof(indexpath)) {
+		perror("snprintf");
 		return -1;
 	    }
 	    if (stat(indexpath, statbuf) == 0) {
 		if (snprintf(outpath, outsize, "%s", indexpath) >= (int)outsize) {
+		    perror("snprintf");
 		    return -1;
 		}
 		*flags_out &= ~FLAG_DIR;
@@ -322,10 +333,15 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	    }
 	}
     }
-    fprintf(stderr, "uriToPath: SUCCESS outpath=%s flags=%d\n", outpath, *flags_out);
     return 0;
 }
 
+/*
+ * handles a single client TCP connection
+ * 	- reads requests
+ * 	- parses method/URI
+ * 	- generates HTTP responses
+ */
 void
 handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd, const char *cgidir)
 {
@@ -420,8 +436,8 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	goto send_response;
     }
 
-    char dateBuf[64]; /* MAGIC NUMBER */
-    char lastModBuf[64]; /* MAGIC NUMBER */
+    char dateBuf[MAXDATE];
+    char lastModBuf[MAXDATE];
     if (req.ims_time > 0 && sb.st_mtime <= req.ims_time) {
 	formatDate(time_now, dateBuf, sizeof(dateBuf));
 	formatDate(sb.st_mtime, lastModBuf, sizeof(lastModBuf));
@@ -451,7 +467,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    goto send_response;
 	}
 
-	char body[8192]; /* MAGIC NUMBER */
+	char body[8192]; /* fits 1-2 pages to avoid fragmentation*/
 	int body_len = snprintf(body, sizeof(body),
 	    "<html><head><title>Index of %s</title></head>"
 	    "<body><h1>Index of %s</h1><ul>", req.uri, req.uri);
