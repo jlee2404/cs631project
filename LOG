@@ -1,3 +1,62 @@
+commit 9e2f2239eeb90ef8def492b688edc0cc7963b6ff
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 06:14:15 2025 +0000
+
+    fixed bugs around CGIs
+
+commit 7f8ccbe73608f05651d34dc99f9ad58471705c81
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 03:53:18 2025 +0000
+
+    implemented CGIs
+
+commit a0bb7cb1bb6b9a85b01a38dd5b2ea46b1a02ec0c
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 02:27:15 2025 +0000
+
+    finished HTTP response handling
+
+commit b00b3a0f2e68ca4aa0548db0d3e07e9a6747c9b2
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Mon Dec 8 01:23:13 2025 +0000
+
+    updated HTTP response handling
+
+commit 29b2a568e157cb7a131e6dbf30339bb14e19d265
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Sun Dec 7 21:02:49 2025 +0000
+
+    fixed If-Modified-Since handling
+
+commit 5d40180ea2bb7b7a8240fb8698c142af83aae516
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Sun Dec 7 20:50:57 2025 +0000
+
+    fixed handling for HEAD
+
+commit 01a98daba2919a6f177dc52b65aced344eab9820
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Sun Dec 7 19:26:20 2025 +0000
+
+    rebased and small fixes
+
+commit ab21e502109b5651bc0e5f828617ec328e823f5f
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Sun Dec 7 03:44:22 2025 +0000
+
+    removed testing directory
+
+commit c0ea9dff8230e6f33be0ba0230ddbfc9c0fcabf2
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Sun Dec 7 03:41:45 2025 +0000
+
+    implemented URI resolution and basic request flow
+
+commit a7ba214e10b7a81de87a88e830e04b19975eb148
+Author: Justin Lee <jlee16@stevens.edu>
+Date:   Sat Dec 6 07:37:08 2025 +0000
+
+    updated parseRequest
 commit 52acd8bf972ec7aed38a3b368eccb07f25c6fa35
 Author: Aya Salama <asalama0204@gmail.com>
 Date:   Sat Dec 6 20:04:34 2025 +0000

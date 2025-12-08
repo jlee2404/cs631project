@@ -86,8 +86,7 @@ parseRequest(const char *requeststr, struct request *req)
 
     strncpy(line, ptr, len);
     line[len] = '\0';
-    ptr = endCurrentLine + 2; /* move ptr to next line */
-
+    ptr = endCurrentLine + 2;
     
     int result;
     if ((result = sscanf(line, "%s %s HTTP/%f",
@@ -115,7 +114,6 @@ parseRequest(const char *requeststr, struct request *req)
 
     req->if_modified_since[0] = '\0';
     req->ims_time = 0;
-    
 
     while (*ptr && strncmp(ptr, "\r\n", 2) != 0) {
 	endCurrentLine = strstr(ptr, "\r\n");
@@ -130,7 +128,7 @@ parseRequest(const char *requeststr, struct request *req)
 
     	strncpy(line, ptr, len);
     	line[len] = '\0';
-   	ptr = endCurrentLine + 2; /* move ptr to next line */
+   	ptr = endCurrentLine + 2;
 
 	if (strncasecmp(line, "If-Modified-Since:", 18) == 0) {
 	    const char * val = line + 18;
