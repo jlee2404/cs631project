@@ -1,6 +1,6 @@
 CC=	cc
 CFLAGS=	-ansi -g -Wall -Werror -Wextra -Wformat=2 -Wjump-misses-init \
-	-Wlogical-op -Wshadow
+	-Wlogical-op -Wshadow -lmagic
 
 PROG=	sws
 OBJS=	sws.o parse.o

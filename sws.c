@@ -9,7 +9,9 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
+#include <magic.h>
 #include <netdb.h>
 #include <pwd.h>
 #include <signal.h>
@@ -101,6 +103,40 @@ createSocket(struct addrinfo *info)
     }
 
     return sock;
+}
+
+static void
+formatDate(time_t t, char *buf, size_t buflen)
+{
+    struct tm tm;
+    gmtime_r(&t, &tm);
+    strftime(buf, buflen, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+}
+
+static const char *
+guess_mime_type(const char *path) /* FUNCTION NAME */
+{
+    static magic_t magic_cookie = NULL; /* VARIABLE NAME */
+
+    if (!magic_cookie) {
+	magic_cookie = magic_open(MAGIC_MIME_TYPE);
+	if (!magic_cookie) {
+	    return "application/octet-stream";
+	}
+	
+	if (magic_load(magic_cookie, NULL) != 0) {
+	    magic_close(magic_cookie);
+	    magic_cookie = NULL;
+	    return "application/octet-stream";
+	}
+    }
+
+    const char *mime = magic_file(magic_cookie, path);
+    if (!mime) {
+	return "application/octet-stream";
+    }
+
+    return mime;
 }
 
 int
@@ -220,10 +256,14 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 {
     int rd, status;
     int flags = 0;
+    int wrote_direct = 0;
+    int filefd = -1;
     char request[BUFSIZ];
+    char header[BUFSIZ];
     char claddr[INET6_ADDRSTRLEN];
     char *response;
     const char *rip;
+    const char *mime = NULL;
     struct request req;
     time_t time_now = time(NULL);
 
@@ -280,7 +320,6 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
     }
 
     if (flags & 4) {
-	char header[256]; /* 256 is safely large enough without going overboard */
 	char uri_with_slash[PATH_MAX];
 	size_t urilen = strlen(req.uri);
 
@@ -300,15 +339,21 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 	goto send_response;
     }
 
-    char headerBuf[512]; /* 512 is safely large enough without going overboard */
+    char dateBuf[64]; /* MAGIC NUMBER */
+    char lastModBuf[64]; /* MAGIC NUMBER */
     if (req.ims_time > 0 && sb.st_mtime <= req.ims_time) {
+	formatDate(time_now, dateBuf, sizeof(dateBuf));
+	formatDate(sb.st_mtime, lastModBuf, sizeof(lastModBuf));
+
 	status = 304;
-	snprintf(headerBuf, sizeof(headerBuf),
+	snprintf(header, sizeof(header),
 	    "HTTP/1.0 304 Not Modified\r\n"
 	    "Date: %s\r\n"
-	    "Server: sws/1.0\r\n\r\n",
-	    asctime(gmtime(&time_now)));
-	response = headerBuf;
+	    "Server: sws/1.0\r\n"
+	    "Last-Modified: %s\r\n"
+	    "Content-Length: 0\r\n\r\n",
+	    dateBuf, lastModBuf);
+	response = header;
 	goto send_response;
     }
 
@@ -342,32 +387,68 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 	body_len += snprintf(body + body_len, sizeof(body) - body_len,
 	    "</ul></body></html>");
 
-    	char headerBuffer[8192]; /* MAGIC NUMBER */
+	formatDate(time_now, dateBuf, sizeof(dateBuf));
+	formatDate(sb.st_mtime, lastModBuf, sizeof(lastModBuf));
+
 	status = 200;
-	snprintf(headerBuffer, sizeof(headerBuffer),
+	snprintf(header, sizeof(header),
 	    "HTTP/1.0 200 OK\r\n"
+	    "Date: %s\r\n"
+	    "Server: sws/1.0\r\n"
+	    "Last-Modified: %s\r\n"
 	    "Content-Type: text/html\r\n"
 	    "Content-Length: %d\r\n\r\n%s",
-	    body_len, body);
-	response = headerBuffer;
+	    dateBuf, lastModBuf, body_len, body);
+	response = header;
 	goto send_response;
     }
-	
-    status = 200;
-    snprintf(headerBuf, sizeof(headerBuf),
-	"HTTP/1.0 200 OK\r\n"
-	"Content-Type: text/plain\r\n"
-	"Content-Length: 19\r\n\r\n");
 
-    if (strcmp(req.method, "GET") == 0) {
-	strncat(headerBuf, "Request valid: OK\r\n", sizeof(headerBuf)-strlen(headerBuf)-1);
+    filefd = open(fullpath, O_RDONLY);
+    if (filefd < 0) {
+	status = 403;
+	response = "HTTP/1.0 403 Forbidden\r\n"
+	    "Content-Type: text/plain\r\n"
+     	    "Content-Length: 11\r\n\r\n"
+	    "Forbidden\r\n";
+	goto send_response;
     }
 
-    response = headerBuf;
+    formatDate(time_now, dateBuf, sizeof(dateBuf));
+    formatDate(sb.st_mtime, lastModBuf, sizeof(lastModBuf));
+    mime = guess_mime_type(fullpath);
+
+    status = 200;
+    snprintf(header, sizeof(header),
+	"HTTP/1.0 200 OK\r\n"
+	"Date: %s\r\n"
+	"Server: sws/1.0\r\n"
+	"Last-Modified: %s\r\n"
+	"Content-Type: %s\r\n"
+	"Content-Length: %jd\r\n\r\n",
+	dateBuf, lastModBuf, mime, (intmax_t)sb.st_size);
+
+    write(fd, header, strlen(header));
+
+    if (strcmp(req.method, "GET") == 0) {
+	char buf[BUFSIZ];
+	ssize_t n;
+	while ((n = read(filefd, buf, sizeof(buf))) > 0) {
+	    write(fd, buf, n);
+	}
+    }
+
+    if (close(filefd) < 0) {
+	perror("close");
+	exit(EXIT_FAILURE);
+    }
+    response = header;
+    wrote_direct = 1;
 
 send_response:
-    if (write(fd, response, strlen(response)) < 0) {
-	perror("write");
+    if (!wrote_direct && response) {
+        if (write(fd, response, strlen(response)) < 0) {
+	    perror("write");
+        }
     }
 
     if (logfd >= 0) {
