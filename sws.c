@@ -417,7 +417,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
     }
 
     if (flags & FLAG_NEEDSLASH) {
-	char uri_with_slash[PATH_MAX];
+	char uri_with_slash[PATH_MAX+2];
 	size_t urilen = strlen(req.uri);
 
 	if (urilen > 0 && req.uri[urilen - 1] == '/') {
@@ -497,8 +497,16 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
 	    "Server: sws/1.0\r\n"
 	    "Last-Modified: %s\r\n"
 	    "Content-Type: text/html\r\n"
-	    "Content-Length: %d\r\n\r\n%s",
-	    dateBuf, lastModBuf, body_len, body);
+	    "Content-Length: %d\r\n\r\n",
+	    dateBuf, lastModBuf, body_len);
+	
+	write(fd, header, strlen(header));
+
+	if (strcmp(req.method, "GET") == 0) {
+	    write(fd, body, body_len);
+	}
+
+	wrote_direct = 1;
 	response = header;
 	body_bytes = body_len;
 	goto send_response;
@@ -680,8 +688,9 @@ handleSocket(int sock, const char *dir, int logfd, const char *cgidir)
 }
 
 void
-reap()
+reap(int signo)
 {
+    (void)signo; /* silence unused warning */
     wait(NULL);
 }
 
