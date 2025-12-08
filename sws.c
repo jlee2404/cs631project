@@ -6,6 +6,7 @@
 
 #include <netinet/in.h>
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -105,13 +106,21 @@ createSocket(struct addrinfo *info)
 int
 uriToPath(const char *docroot, const char *uri, char *outpath, 
     size_t outsize, struct stat *statbuf, int *flags_out)
-{
+{   
+    char candidate[PATH_MAX];
+    char resolved[PATH_MAX];
+    char realroot[PATH_MAX];
+
     if (!docroot || !uri || !outpath || outsize == 0) {
 	return -1;
     }
 
     *flags_out = 0;
 
+    if (realpath(docroot, realroot) == NULL) {
+	return -1;
+    }
+    
     if (strstr(uri, "..") != NULL) {
 	errno = EACCES;
         return -1;
@@ -140,13 +149,13 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 
 	const char *rest = uri + 1 + uname_len;
 	if (rest[0] == '\0') {
-	    if (snprintf(outpath, outsize, "%s/sws", pw->pw_dir) >= 
-		(int)outsize) {
+	    if (snprintf(candidate, sizeof(candidate), "%s/sws", pw->pw_dir) >= 
+		(int)sizeof(candidate)) {
 		return -1;
 	    }
 	} else {
-	    if (snprintf(outpath, outsize, "%s/sws%s", pw->pw_dir, rest) >= 
-		(int)outsize) {
+	    if (snprintf(candidate, sizeof(candidate), "%s/sws%s", pw->pw_dir, rest) >= 
+		(int)sizeof(candidate)) {
 		return -1;
 	    }
 	}
@@ -155,16 +164,27 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	    return -1;
 	}
 
-	if (strcmp(uri, "/") == 0) {
-	    if (snprintf(outpath, outsize, "%s/", docroot) >= (int)outsize) {
-		return -1;
-	    }
-	} else {
-	    if (snprintf(outpath, outsize, "%s%s", docroot, uri) >= 
-		(int)outsize) {
-		return -1;
-	    }
+	if (snprintf(candidate, sizeof(candidate), "%s%s", docroot, uri) >= 
+	    (int)sizeof(candidate)) {
+    	    return -1;
 	}
+    }
+
+    if (realpath(candidate, resolved) == NULL) {
+	strncpy(outpath, candidate, outsize);
+	outpath[outsize - 1] = '\0';
+	return 0;
+    }
+
+    size_t rootlen = strlen(realroot);
+    if (strncmp(resolved, realroot, rootlen) != 0 ||
+	(resolved[rootlen] != '/' && resolved[rootlen] != '\0')) {
+	errno = EACCES;
+	return -1;
+    }
+
+    if (snprintf(outpath, outsize, "%s", resolved) >= (int)outsize) {
+	return -1;
     }
 
     if (stat(outpath, statbuf) == 0) {
@@ -172,21 +192,22 @@ uriToPath(const char *docroot, const char *uri, char *outpath,
 	if (S_ISDIR(statbuf->st_mode)) {
 	    *flags_out |= 2; /* is direcotry */
 	    size_t urilen = strlen(uri);
-	    if (urilen == 0 || uri[urilen-1] != '/') {
+	    if (uri[urilen-1] != '/') {
 		*flags_out |= 4; /* needs trailing slash redirect */
-	    } else {
-		char indexpath[PATH_MAX];
-		if (snprintf(indexpath, sizeof(indexpath), "%sindex.html", outpath) >= 
-		    (int)sizeof(indexpath)) {
+		return 0;
+	    }
+	    
+	    char indexpath[PATH_MAX];
+	    if (snprintf(indexpath, sizeof(indexpath), "%s/index.html", outpath) >= 
+		(int)sizeof(indexpath)) {
+		return -1;
+	    }
+	    if (stat(indexpath, statbuf) == 0) {
+		if (snprintf(outpath, outsize, "%s", indexpath) >= (int)outsize) {
 		    return -1;
 		}
-		if (stat(indexpath, statbuf) == 0) {
-		    if (snprintf(outpath, outsize, "%s", indexpath) >= (int)outsize) {
-			return -1;
-		    }
-		    *flags_out &= ~2; /* file now */
-		    *flags_out |= 1;
-		}
+		*flags_out &= ~2; /* file now */
+		*flags_out |= 1;
 	    }
 	}
     }
@@ -198,7 +219,7 @@ void
 handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 {
     int rd, status;
-    int total_read = 0;
+    int flags = 0;
     char request[BUFSIZ];
     char claddr[INET6_ADDRSTRLEN];
     char *response;
@@ -208,71 +229,145 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
 
     memset(&req, 0, sizeof(req));
     
-    if ((rd = read(fd, request+total_read, BUFSIZ-total_read-1)) <= 0) {
+    if ((rd = read(fd, request, BUFSIZ-1)) <= 0) {
         perror("reading stream message");
         goto exit;
     }
+    request[rd] = '\0';
 
     if ((rip = inet_ntop(PF_INET6, &(client.sin6_addr), claddr, INET6_ADDRSTRLEN)) == NULL) {
         perror("inet_ntop");
         rip = "unkown";
     }
-    if (parseRequest(request, &req) == 0) {
-	char fullpath[PATH_MAX];
-	struct stat sb;
-	int flags = 0;
 
-	int rv = uriToPath(dir, req.uri, fullpath, sizeof(fullpath), &sb, &flags);
-	if (rv < 0) {
+    if (parseRequest(request, &req) != 0) {
+	if (strcmp(req.method, "GET") != 0 && strcmp(req.method, "HEAD") != 0) {
+	    status = 501;
+	    response = "HTTP/1.0 501 Not Implemented\r\n"
+            	"Content-Type: text/plain\r\n"
+	    	"Content-Length: 17\r\n\r\n"
+    	    	"Not Implemented\r\n";
+    	} else {
+	    status = 400;
+  	    response = "HTTP/1.0 400 Bad Request\r\n"
+            	"Content-Type: text/plain\r\n"
+	    	"Content-Length: 13\r\n\r\n"
+    	   	 "Bad Request\r\n";
+	}
+
+	goto send_response;
+    }
+
+    char fullpath[PATH_MAX];
+    struct stat sb;
+
+    if (uriToPath(dir, req.uri, fullpath, sizeof(fullpath), &sb, &flags) < 0) {
+	status = 403;
+	response = "HTTP/1.0 403 Forbidden\r\n"
+	    "Content-Type: text/plain\r\n"
+	    "Content-Length: 11\r\n\r\n"
+	    "Forbidden\r\n";
+	goto send_response;
+    }
+
+    if (!(flags & 1)) {
+	status = 404;
+	response = "HTTP/1.0 404 Not Found\r\n"
+       	    "Content-Type: text/plain\r\n"
+	    "Content-Length: 11\r\n\r\n"
+	    "Not Found\r\n";
+	goto send_response;
+    }
+
+    if (flags & 4) {
+	char header[256]; /* 256 is safely large enough without going overboard */
+	char uri_with_slash[PATH_MAX];
+	size_t urilen = strlen(req.uri);
+
+	if (urilen > 0 && req.uri[urilen - 1] == '/') {
+	    snprintf(uri_with_slash, sizeof(uri_with_slash), "%s", req.uri);
+	} else {
+	    snprintf(uri_with_slash, sizeof(uri_with_slash), "%s/", req.uri);
+	}
+
+	status = 301;
+	snprintf(header, sizeof(header), 
+	    "HTTP/1.0 301 Moved Permanently\r\n"
+	    "Location: %s\r\n"
+	    "Content-Length: 0\r\n\r\n",
+	    uri_with_slash);
+	response = header;
+	goto send_response;
+    }
+
+    char headerBuf[512]; /* 512 is safely large enough without going overboard */
+    if (req.ims_time > 0 && sb.st_mtime <= req.ims_time) {
+	status = 304;
+	snprintf(headerBuf, sizeof(headerBuf),
+	    "HTTP/1.0 304 Not Modified\r\n"
+	    "Date: %s\r\n"
+	    "Server: sws/1.0\r\n\r\n",
+	    asctime(gmtime(&time_now)));
+	response = headerBuf;
+	goto send_response;
+    }
+
+    if ((flags & 2)) {
+	DIR *dirp = opendir(fullpath);
+    	if (!dirp) {
 	    status = 403;
 	    response = "HTTP/1.0 403 Forbidden\r\n"
 	        "Content-Type: text/plain\r\n"
-	    	"Content-Length: 11\r\n\r\n"
-	    	"Forbidden\r\n";
-	    goto exit;
+    		"Content-Length: 11\r\n\r\n"
+		"Forbidden\r\n";
+	    goto send_response;
 	}
 
-	if (!(flags & 1)) {
-	    status = 404;
-	    response = "HTTP/1.0 404 Not Found\r\n"
-	    	"Content-Type: text/plain\r\n"
-	    	"Content-Length: 11\r\n\r\n"
-	    	"Not Found\r\n";
-	    goto exit;
-	}
+	char body[8192]; /* MAGIC NUMBER */
+	int body_len = snprintf(body, sizeof(body),
+	    "<html><head><title>Index of %s</title></head>"
+	    "<body><h1>Index of %s</h1><ul>", req.uri, req.uri);
 
-	if (flags & 4) {
-	    status = 301;
-	    char location[PATH_MAX];
-	    snprintf(location, sizeof(location), "Location: %s/\r\n", req.uri);
-	    char header[256]; /* 256 is safely large enough without going overboard */
-	    snprintf(header, sizeof(header), "HTTP/1.0 301 Moved Permanently\r\n%s\r\n", location);
-	    response = header;
-	    goto exit;
+	struct dirent *dp;
+	while((dp = readdir(dirp)) != NULL) {
+ 	    if (dp->d_name[0] == '.') {
+		continue;
+	    }
+	    body_len += snprintf(body + body_len, sizeof(body) - body_len,
+		"<li><a href=\"%s%s\">%s</a></li>",
+		req.uri, dp->d_name, dp->d_name);
 	}
+	closedir(dirp);
 
-	char headerBuf[512]; /* 512 is safely large enough without going overboard */
-	if (req.ims_time > 0 && sb.st_mtime <= req.ims_time) {
-	    status = 304;
-	    snprintf(headerBuf, sizeof(headerBuf),
-		"HTTP/1.0 304 Not Modified\r\n"
-		"Date: %s\r\n"
-		"Server: sws/1.0\r\n\r\n",
-		asctime(gmtime(&time_now)));
-	    response = headerBuf;
-	    goto exit;
-	}
-	
+	body_len += snprintf(body + body_len, sizeof(body) - body_len,
+	    "</ul></body></html>");
+
+    	char headerBuffer[8192]; /* MAGIC NUMBER */
 	status = 200;
-	snprintf(headerBuf, sizeof(headerBuf),
+	snprintf(headerBuffer, sizeof(headerBuffer),
 	    "HTTP/1.0 200 OK\r\n"
-	    "Content-Type: text/plain\r\n"
-	    "Content-Length: 19\r\n\r\n");
+	    "Content-Type: text/html\r\n"
+	    "Content-Length: %d\r\n\r\n%s",
+	    body_len, body);
+	response = headerBuffer;
+	goto send_response;
+    }
+	
+    status = 200;
+    snprintf(headerBuf, sizeof(headerBuf),
+	"HTTP/1.0 200 OK\r\n"
+	"Content-Type: text/plain\r\n"
+	"Content-Length: 19\r\n\r\n");
 
-	if (strcmp(req.method, "GET") == 0) {
-	    strncat(headerBuf, "Request valid: OK\r\n", sizeof(headerBuf)-strlen(headerBuf)-1);
-	}
-	response = headerBuf;
+    if (strcmp(req.method, "GET") == 0) {
+	strncat(headerBuf, "Request valid: OK\r\n", sizeof(headerBuf)-strlen(headerBuf)-1);
+    }
+
+    response = headerBuf;
+
+send_response:
+    if (write(fd, response, strlen(response)) < 0) {
+	perror("write");
     }
 
     if (logfd >= 0) {
@@ -280,12 +375,11 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd)
     }
 
 exit:
-    write(fd, response, strlen(response));
     if (close(fd) < 0) {
         perror("close");
         exit(EXIT_FAILURE);
     }
-    exit(EXIT_SUCCESS);
+    return;
     /* NOTREACHED */
 }
 
@@ -310,6 +404,7 @@ handleSocket(int sock, const char *dir, int logfd)
         exit(EXIT_FAILURE);
     } else if (pid == 0) { /* child */
         handleConnection(fd, client, dir, logfd);
+	_exit(EXIT_SUCCESS);
     }
 
     /* parent returns */
