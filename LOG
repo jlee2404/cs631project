@@ -57,6 +57,13 @@ Author: Justin Lee <jlee16@stevens.edu>
 Date:   Sat Dec 6 07:37:08 2025 +0000
 
     updated parseRequest
+commit 52acd8bf972ec7aed38a3b368eccb07f25c6fa35
+Author: Aya Salama <asalama0204@gmail.com>
+Date:   Sat Dec 6 20:04:34 2025 +0000
+
+    implemented LOGGING
+    
+    implemented logging
 
 commit eb066240189b64e11f19ac5f0165ed7168ccbff4
 Author: Aya Salama <asalama0204@gmail.com>

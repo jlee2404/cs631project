@@ -21,6 +21,7 @@ Aya:
 - daemonization
 - reading data from client
 - request parsing
+- logging
 
 Justin:
 - HTTP response
