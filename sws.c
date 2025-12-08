@@ -351,7 +351,7 @@ handleConnection(int fd, struct sockaddr_in6 client, const char *dir, int logfd,
     int wrote_direct = 0;
     int filefd = -1;
     char request[BUFSIZ];
-    char header[BUFSIZ];
+    char header[BUFSIZ*2];
     char claddr[INET6_ADDRSTRLEN];
     char *response;
     const char *rip;
